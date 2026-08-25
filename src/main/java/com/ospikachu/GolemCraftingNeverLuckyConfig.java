@@ -10,7 +10,7 @@ public interface GolemCraftingNeverLuckyConfig extends Config
     @ConfigItem(
             keyName = "enabled",
             name = "Enabled",
-            description = "Enable the plugin"
+            description = "Enable the Never Lucky overlay"
     )
     default boolean enabled()
     {
@@ -20,7 +20,7 @@ public interface GolemCraftingNeverLuckyConfig extends Config
     @ConfigItem(
             keyName = "message",
             name = "Message",
-            description = "Message displayed when the trigger fires"
+            description = "Text shown above your character"
     )
     default String message()
     {
@@ -28,12 +28,22 @@ public interface GolemCraftingNeverLuckyConfig extends Config
     }
 
     @ConfigItem(
+            keyName = "displayTicks",
+            name = "Display duration",
+            description = "How long the message stays above your character"
+    )
+    default int displayTicks()
+    {
+        return 30;
+    }
+
+    @ConfigItem(
             keyName = "cooldownTicks",
             name = "Cooldown",
-            description = "Minimum number of game ticks between trigger messages"
+            description = "Prevents duplicate messages"
     )
     default int cooldownTicks()
     {
-        return 10;
+        return 5;
     }
 }

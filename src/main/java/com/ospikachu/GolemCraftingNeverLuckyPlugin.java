@@ -1,31 +1,50 @@
 package com.ospikachu;
 
 import com.google.inject.Provides;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 
-import net.runelite.api.GameState;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.Player;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.overlay.OverlayManager;
 
 @PluginDescriptor(
         name = "Golem Crafting Never Lucky",
-        description = "Shows a configurable Never lucky message for Golem Crafting events.",
-        tags = {"golem", "crafting", "minigame", "never lucky"}
+        description = "Shows 'Never lucky' above your character when a Golem Crafting golem is completed.",
+        tags = {
+                "golem",
+                "crafting",
+                "wyrmscraig",
+                "never lucky"
+        }
 )
 public class GolemCraftingNeverLuckyPlugin extends Plugin
 {
+    private static final Pattern GOLEM_COMPLETE_MESSAGE = Pattern.compile(
+            "As you complete the golem it leaves a gift \\((on the ground|in your gem sack|in your gem bag)\\) for you: (\\d+) x (.*)\\."
+    );
+
     @Inject
     private Client client;
 
     @Inject
     private GolemCraftingNeverLuckyConfig config;
 
-    private int cooldownTicks;
+    @Inject
+    private OverlayManager overlayManager;
+
+    @Inject
+    private GolemCraftingNeverLuckyOverlay overlay;
+
+    private int ticksRemaining;
 
     @Provides
     GolemCraftingNeverLuckyConfig provideConfig(ConfigManager configManager)
@@ -36,58 +55,73 @@ public class GolemCraftingNeverLuckyPlugin extends Plugin
     @Override
     protected void startUp()
     {
-        cooldownTicks = 0;
+        ticksRemaining = 0;
+        overlayManager.add(overlay);
     }
 
     @Override
     protected void shutDown()
     {
-        cooldownTicks = 0;
+        overlayManager.remove(overlay);
+        ticksRemaining = 0;
     }
 
     @Subscribe
     public void onGameTick(GameTick event)
     {
-        if (cooldownTicks > 0)
+        if (ticksRemaining > 0)
         {
-            cooldownTicks--;
+            ticksRemaining--;
         }
-
-        if (client.getGameState() != GameState.LOGGED_IN || !config.enabled())
-        {
-            return;
-        }
-
-        /*
-         * Golem Crafting trigger intentionally left isolated here.
-         *
-         * We should wire this to the exact current OSRS/RuneLite
-         * event/state after verifying the minigame's current IDs/messages.
-         * This avoids relying on invented IDs.
-         */
     }
 
     @Subscribe
     public void onGameStateChanged(GameStateChanged event)
     {
-        if (event.getGameState() != GameState.LOGGED_IN)
+        ticksRemaining = 0;
+    }
+
+    @Subscribe
+    public void onChatMessage(ChatMessage event)
+    {
+        if (!config.enabled())
         {
-            cooldownTicks = 0;
+            return;
         }
-    }
 
-    private boolean canTrigger()
-    {
-        return cooldownTicks <= 0;
-    }
+        if (event.getType() != ChatMessageType.GAMEMESSAGE)
+        {
+            return;
+        }
 
-    private void trigger()
-    {
-        cooldownTicks = Math.max(0, config.cooldownTicks());
+        if (ticksRemaining > 0)
+        {
+            return;
+        }
 
-        /*
-         * The final reaction should be implemented here once the
-         * exact Golem Crafting event has been verified.
-         */
+        String message = event.getMessage();
+
+        if (message == null)
+        {
+            return;
+        }
+
+        message = message.replaceAll("<[^>]*>", "");
+
+        if (!GOLEM_COMPLETE_MESSAGE.matcher(message).matches())
+        {
+            return;
+        }
+
+        Player localPlayer = client.getLocalPlayer();
+
+        if (localPlayer == null)
+        {
+            return;
+        }
+
+        ticksRemaining = Math.max(1, config.cooldownTicks());
+
+        overlay.show(config.message(), config.displayTicks());
     }
 }
